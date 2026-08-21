@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS Trainer — 書いて覚えるJavaScript</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel2: #1e222e;
+    --border: #2a2f3e;
+    --text: #d7dae3;
+    --dim: #8a90a3;
+    --accent: #5eb1ff;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --mono: "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    height: 100vh; display: flex; overflow: hidden;
+  }
+
+  /* ---- sidebar ---- */
+  #sidebar {
+    width: 260px; min-width: 260px; background: var(--panel);
+    border-right: 1px solid var(--border); overflow-y: auto; padding: 16px 0;
+  }
+  #sidebar h1 { font-size: 16px; padding: 0 16px 4px; color: var(--accent); }
+  #sidebar .sub { font-size: 11px; color: var(--dim); padding: 0 16px 12px; }
+  #progressbar { height: 6px; background: var(--panel2); border-radius: 3px; margin: 0 16px 16px; overflow: hidden; }
+  #progressbar > div { height: 100%; background: var(--green); width: 0%; transition: width .3s; }
+  .chapter { font-size: 12px; color: var(--dim); padding: 12px 16px 4px; font-weight: 600; }
+  .lesson {
+    padding: 7px 16px 7px 28px; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; border-left: 3px solid transparent;
+  }
+  .lesson:hover { background: var(--panel2); }
+  .lesson.active { background: var(--panel2); border-left-color: var(--accent); }
+  .lesson .mark { width: 14px; text-align: center; color: var(--dim); }
+  .lesson.done .mark { color: var(--green); }
+
+  /* ---- main ---- */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #desc {
+    padding: 20px 24px; overflow-y: auto; max-height: 38%;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  #desc h2 { font-size: 18px; margin-bottom: 8px; }
+  #desc p { font-size: 14px; line-height: 1.7; margin-bottom: 8px; color: var(--text); }
+  #desc code, #output code {
+    font-family: var(--mono); font-size: 12.5px; background: var(--panel2);
+    padding: 1px 5px; border-radius: 4px; color: var(--yellow);
+  }
+  #desc pre {
+    background: var(--panel2); padding: 10px 12px; border-radius: 6px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+    margin: 8px 0; overflow-x: auto; color: var(--text);
+  }
+  .task { border-left: 3px solid var(--accent); padding-left: 10px; margin-top: 10px; }
+
+  #editorwrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #toolbar {
+    display: flex; gap: 8px; padding: 8px 24px; align-items: center;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+  }
+  button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0b0d12; border: none; font-weight: 600; }
+  button.primary:hover { opacity: .9; }
+  #toolbar .spacer { flex: 1; }
+  #toolbar .kbd { font-size: 11px; color: var(--dim); }
+
+  #editor {
+    flex: 1; width: 100%; background: var(--bg); color: var(--text); border: none;
+    resize: none; outline: none; padding: 14px 24px;
+    font-family: var(--mono); font-size: 14px; line-height: 1.6; tab-size: 2;
+  }
+
+  #output {
+    height: 32%; min-height: 140px; overflow-y: auto; background: var(--panel);
+    border-top: 1px solid var(--border); padding: 12px 24px; font-size: 13px;
+  }
+  #output .test { font-family: var(--mono); font-size: 12.5px; padding: 3px 0; }
+  #output .pass { color: var(--green); }
+  #output .fail { color: var(--red); }
+  #output .err { color: var(--red); font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; }
+  #output .log { color: var(--dim); font-family: var(--mono); font-size: 12.5px; }
+  #output .celebrate { color: var(--green); font-weight: 600; margin-top: 8px; }
+  #output .muted { color: var(--dim); }
+  .hintbox {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; margin-top: 10px; font-size: 13px; line-height: 1.7;
+  }
+  .hintbox pre { background: var(--bg); padding: 8px 10px; border-radius: 4px; font-family: var(--mono); font-size: 12.5px; margin-top: 6px; overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <h1>JS Trainer</h1>
+  <div class="sub">書いて覚えるJavaScript全18問</div>
+  <div id="progressbar"><div></div></div>
+  <div id="nav"></div>
+</nav>
+
+<div id="main">
+  <div id="desc"></div>
+  <div id="editorwrap">
+    <div id="toolbar">
+      <button class="primary" id="btn-run">▶ 実行して採点</button>
+      <button id="btn-hint">ヒント</button>
+      <button id="btn-solution">解答例</button>
+      <button id="btn-reset">リセット</button>
+      <span class="spacer"></span>
+      <span class="kbd">⌘+Enter / Ctrl+Enter で実行</span>
+    </div>
+    <textarea id="editor" spellcheck="false"></textarea>
+  </div>
+  <div id="output"><span class="muted">コードを書いて「実行して採点」を押してください。</span></div>
+</div>
+
+<script>
+"use strict";
+
+/* ============ テストヘルパー ============ */
+function fmt(v) {
+  if (typeof v === "string") return JSON.stringify(v);
+  if (typeof v === "function") return "[function]";
+  try { return JSON.stringify(v) ?? String(v); } catch { return String(v); }
+}
+function deepEq(a, b) {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every(k => deepEq(a[k], b[k]));
+}
+// eq: 期待値との比較結果を返す
+function eq(name, got, want) {
+  return deepEq(got, want)
+    ? { pass: true, name }
+    : { pass: false, name, detail: `期待値 ${fmt(want)} / 実際 ${fmt(got)}` };
+}
+function check(name, cond, detail) {
+  return cond ? { pass: true, name } : { pass: false, name, detail };
+}
+function T(name, run) { return { name, run }; }
+
+/* ============ カリキュラム ============ */
+const CHAPTERS = [
+{
+  title: "第1章 基礎",
+  lessons: [
+  {
+    id: "greet", expose: "greet", title: "テンプレート文字列",
+    desc: `<h2>1-1. テンプレート文字列</h2>
+<p>バッククォート <code>\`...\`</code> で囲むと、文字列の中に <code>\${変数}</code> で値を埋め込めます。文字列連結の <code>+</code> より読みやすく、現代のJSでは基本の書き方です。</p>
+<pre>const name = "世界";
+console.log(\`Hello, \${name}!\`); // Hello, 世界!</pre>
+<p class="task"><b>課題:</b> 関数 <code>greet(name)</code> を完成させ、<code>こんにちは、〇〇さん！</code> という文字列を返してください。</p>`,
+    starter: `function greet(name) {\n  // ここに書く\n}\n`,
+    hint: `return \`こんにちは、\${name}さん！\`; のようにバッククォートで囲みます。`,
+    solution: `function greet(name) {\n  return \`こんにちは、\${name}さん！\`;\n}`,
+    tests: [
+      T(`greet("太郎")`, f => eq(`greet("太郎")`, f("太郎"), "こんにちは、太郎さん！")),
+      T(`greet("Miku")`, f => eq(`greet("Miku")`, f("Miku"), "こんにちは、Mikuさん！")),
+    ],
+  },
+  {
+    id: "isEven", expose: "isEven", title: "条件と真偽値",
+    desc: `<h2>1-2. 条件と真偽値</h2>
+<p>比較演算子は必ず <code>===</code>（厳密等価）を使います。<code>==</code> は型変換が起きるためバグの温床です。剰余は <code>%</code> で求められます。</p>
+<pre>5 % 2  // 1
+6 % 2  // 0</pre>
+<p class="task"><b>課題:</b> 関数 <code>isEven(n)</code> を作り、偶数なら <code>true</code>、奇数なら <code>false</code> を返してください。</p>`,
+    starter: `function isEven(n) {\n  // ここに書く\n}\n`,
+    hint: `n % 2 === 0 という式自体が true/false を返すので、if文は不要です。`,
+    solution: `function isEven(n) {\n  return n % 2 === 0;\n}`,
+    tests: [
+      T("isEven(4)", f => eq("isEven(4)", f(4), true)),
+      T("isEven(7)", f => eq("isEven(7)", f(7), false)),
+      T("isEven(0)", f => eq("isEven(0)", f(0), true)),
+    ],
+  },
+  {
+    id: "fizzbuzz", expose: "fizzbuzz", title: "FizzBuzz",
+    desc: `<h2>1-3. FizzBuzz（定番問題）</h2>
+<p>if / else if / else の練習です。条件の<b>順番</b>が重要になります。数値を文字列にするには <code>String(n)</code> を使います。</p>
+<p class="task"><b>課題:</b> 関数 <code>fizzbuzz(n)</code> を作ってください。3の倍数なら <code>"Fizz"</code>、5の倍数なら <code>"Buzz"</code>、両方の倍数なら <code>"FizzBuzz"</code>、それ以外は数値を文字列にして返します。</p>`,
+    starter: `function fizzbuzz(n) {\n  // ここに書く\n}\n`,
+    hint: `「15の倍数か？」を最初に判定しないと、"FizzBuzz" に到達できません。`,
+    solution: `function fizzbuzz(n) {\n  if (n % 15 === 0) return "FizzBuzz";\n  if (n % 3 === 0) return "Fizz";\n  if (n % 5 === 0) return "Buzz";\n  return String(n);\n}`,
+    tests: [
+      T("fizzbuzz(3)", f => eq("fizzbuzz(3)", f(3), "Fizz")),
+      T("fizzbuzz(10)", f => eq("fizzbuzz(10)", f(10), "Buzz")),
+      T("fizzbuzz(30)", f => eq("fizzbuzz(30)", f(30), "FizzBuzz")),
+      T("fizzbuzz(7)", f => eq("fizzbuzz(7)", f(7), "7")),
+    ],
+  },
+]},
+{
+  title: "第2章 関数",
+  lessons: [
+  {
+    id: "double", expose: "double", title: "アロー関数",
+    desc: `<h2>2-1. アロー関数</h2>
+<p>短い関数は <code>=&gt;</code>（アロー関数）で書くのが現代の主流です。本体が式1つなら <code>return</code> と <code>{}</code> を省略できます。</p>
+<pre>// この2つは（ほぼ）同じ
+function add(a, b) { return a + b; }
+const add = (a, b) => a + b;</pre>
+<p class="task"><b>課題:</b> 数値を2倍にする関数 <code>double</code> を<b>アロー関数</b>で定義してください（<code>const double = ...</code>）。</p>`,
+    starter: `const double = /* ここに書く */;\n`,
+    hint: `引数が1つなら括弧も省略できます: n => n * 2`,
+    solution: `const double = n => n * 2;`,
+    tests: [
+      T("double(4)", f => eq("double(4)", f(4), 8)),
+      T("double(-3)", f => eq("double(-3)", f(-3), -6)),
+    ],
+  },
+  {
+    id: "applyTwice", expose: "applyTwice", title: "高階関数",
+    desc: `<h2>2-2. 高階関数（関数を受け取る関数）</h2>
+<p>JSでは関数も値です。引数として渡したり、返したりできます。これが <code>map</code> や <code>addEventListener</code> など、JSのあらゆる場面の土台になります。</p>
+<p class="task"><b>課題:</b> 関数 <code>applyTwice(fn, x)</code> を作ってください。<code>x</code> に <code>fn</code> を2回適用した結果を返します。例: <code>applyTwice(n =&gt; n + 1, 5)</code> は <code>7</code>。</p>`,
+    starter: `function applyTwice(fn, x) {\n  // ここに書く\n}\n`,
+    hint: `fn(x) の結果をもう一度 fn に渡します: fn(fn(x))`,
+    solution: `function applyTwice(fn, x) {\n  return fn(fn(x));\n}`,
+    tests: [
+      T("applyTwice(n => n + 1, 5)", f => eq("applyTwice(n => n + 1, 5)", f(n => n + 1, 5), 7)),
+      T("applyTwice(s => s + '!', 'go')", f => eq("applyTwice(s => s + '!', 'go')", f(s => s + "!", "go"), "go!!")),
+    ],
+  },
+  {
+    id: "makeCounter", expose: "makeCounter", title: "クロージャ",
+    desc: `<h2>2-3. クロージャ</h2>
+<p>関数の中で作った関数は、外側の変数を「覚えて」います。これをクロージャと呼び、状態を持つ関数を作れます。面接でも頻出の概念です。</p>
+<pre>function makeGreeter(name) {
+  return () => \`Hi, \${name}\`; // name を覚えている
+}</pre>
+<p class="task"><b>課題:</b> 関数 <code>makeCounter()</code> を作ってください。呼び出すたびに 1, 2, 3... と増える数値を返す<b>関数を返し</b>ます。カウンター同士は独立していること。</p>`,
+    starter: `function makeCounter() {\n  // ここに書く\n}\n`,
+    hint: `let count = 0; を宣言し、count を増やして返す関数を return します。`,
+    solution: `function makeCounter() {\n  let count = 0;\n  return () => {\n    count += 1;\n    return count;\n  };\n}`,
+    tests: [
+      T("1回目→1, 2回目→2", f => { const c = f(); const a = c(), b = c(); return check("1回目→1, 2回目→2", a === 1 && b === 2, `実際 ${fmt(a)}, ${fmt(b)}`); }),
+      T("カウンター同士は独立", f => { const c1 = f(); c1(); c1(); const c2 = f(); return eq("カウンター同士は独立", c2(), 1); }),
+    ],
+  },
+]},
+{
+  title: "第3章 配列とオブジェクト",
+  lessons: [
+  {
+    id: "squares", expose: "squares", title: "map",
+    desc: `<h2>3-1. map — 全要素を変換</h2>
+<p><code>map</code> は配列の各要素を変換した<b>新しい配列</b>を返します。forループより短く、元の配列を壊しません。実務コードの大半はループでなく map/filter/reduce で書かれます。</p>
+<pre>[1, 2, 3].map(n => n * 10) // [10, 20, 30]</pre>
+<p class="task"><b>課題:</b> 関数 <code>squares(arr)</code> を作り、各要素を2乗した新しい配列を返してください。</p>`,
+    starter: `function squares(arr) {\n  // ここに書く\n}\n`,
+    hint: `return arr.map(n => n * n);`,
+    solution: `function squares(arr) {\n  return arr.map(n => n * n);\n}`,
+    tests: [
+      T("squares([1, 2, 3])", f => eq("squares([1, 2, 3])", f([1, 2, 3]), [1, 4, 9])),
+      T("元の配列を変更しない", f => { const a = [2, 4]; f(a); return eq("元の配列を変更しない", a, [2, 4]); }),
+    ],
+  },
+  {
+    id: "evens", expose: "evens", title: "filter",
+    desc: `<h2>3-2. filter — 条件で絞り込む</h2>
+<p><code>filter</code> は条件を満たす要素だけの新しい配列を返します。渡す関数が <code>true</code> を返した要素が残ります。</p>
+<pre>[1, 2, 3, 4].filter(n => n > 2) // [3, 4]</pre>
+<p class="task"><b>課題:</b> 関数 <code>evens(arr)</code> を作り、偶数だけの新しい配列を返してください。</p>`,
+    starter: `function evens(arr) {\n  // ここに書く\n}\n`,
+    hint: `1-2 で作った isEven の条件式がそのまま使えます。`,
+    solution: `function evens(arr) {\n  return arr.filter(n => n % 2 === 0);\n}`,
+    tests: [
+      T("evens([1, 2, 3, 4, 5, 6])", f => eq("evens([1, 2, 3, 4, 5, 6])", f([1, 2, 3, 4, 5, 6]), [2, 4, 6])),
+      T("evens([1, 3])", f => eq("evens([1, 3])", f([1, 3]), [])),
+    ],
+  },
+  {
+    id: "total", expose: "total", title: "reduce",
+    desc: `<h2>3-3. reduce — 集計する</h2>
+<p><code>reduce</code> は配列を1つの値に畳み込みます。第1引数は「累積値と要素を受け取り次の累積値を返す関数」、第2引数は初期値です。</p>
+<pre>[1, 2, 3].reduce((sum, n) => sum + n, 0) // 6</pre>
+<p class="task"><b>課題:</b> 関数 <code>total(arr)</code> を作り、数値配列の合計を返してください。空配列なら <code>0</code>。</p>`,
+    starter: `function total(arr) {\n  // ここに書く\n}\n`,
+    hint: `初期値 0 を忘れずに。忘れると空配列でエラーになります。`,
+    solution: `function total(arr) {\n  return arr.reduce((sum, n) => sum + n, 0);\n}`,
+    tests: [
+      T("total([1, 2, 3, 4])", f => eq("total([1, 2, 3, 4])", f([1, 2, 3, 4]), 10)),
+      T("total([])", f => eq("total([])", f([]), 0)),
+    ],
+  },
+  {
+    id: "topThree", expose: "topThree", title: "非破壊のソート",
+    desc: `<h2>3-4. 非破壊のソート</h2>
+<p><code>sort</code> は<b>元の配列を破壊する</b>危険なメソッドです。コピーしてからソートするのが鉄則。また数値は <code>sort((a, b) =&gt; b - a)</code> のように比較関数が必須です（省略すると文字列順！）。</p>
+<pre>const sorted = [...arr].sort((a, b) => b - a); // 降順コピー</pre>
+<p class="task"><b>課題:</b> 関数 <code>topThree(arr)</code> を作り、大きい順に上位3つの配列を返してください。<b>元の配列を変更しないこと。</b></p>`,
+    starter: `function topThree(arr) {\n  // ここに書く\n}\n`,
+    hint: `[...arr] でコピー → sort((a, b) => b - a) → slice(0, 3)`,
+    solution: `function topThree(arr) {\n  return [...arr].sort((a, b) => b - a).slice(0, 3);\n}`,
+    tests: [
+      T("topThree([5, 1, 9, 3, 7])", f => eq("topThree([5, 1, 9, 3, 7])", f([5, 1, 9, 3, 7]), [9, 7, 5])),
+      T("2桁の数値も正しく並ぶ", f => eq("2桁の数値も正しく並ぶ", f([100, 2, 30]), [100, 30, 2])),
+      T("元の配列を変更しない", f => { const a = [3, 1, 2]; f(a); return eq("元の配列を変更しない", a, [3, 1, 2]); }),
+    ],
+  },
+  {
+    id: "firstItem", expose: "firstItem", title: "分割代入",
+    desc: `<h2>3-5. 分割代入</h2>
+<p>配列やオブジェクトから値を取り出す省略記法です。関数の引数でも使え、現代のJSコードでは至る所に登場します。</p>
+<pre>const [a, b] = [1, 2];        // a=1, b=2
+const { name, age } = person;  // person.name, person.age</pre>
+<p class="task"><b>課題:</b> 関数 <code>firstItem(arr)</code> を作り、<b>分割代入を使って</b>先頭の要素を返してください。</p>`,
+    starter: `function firstItem(arr) {\n  // 分割代入を使うこと\n}\n`,
+    hint: `const [head] = arr; と書くと先頭が head に入ります。`,
+    solution: `function firstItem(arr) {\n  const [head] = arr;\n  return head;\n}`,
+    tests: [
+      T("firstItem([10, 20, 30])", f => eq("firstItem([10, 20, 30])", f([10, 20, 30]), 10)),
+      T(`firstItem(["a"])`, f => eq(`firstItem(["a"])`, f(["a"]), "a")),
+    ],
+  },
+  {
+    id: "mergeSettings", expose: "mergeSettings", title: "スプレッド構文",
+    desc: `<h2>3-6. スプレッド構文でマージ</h2>
+<p><code>...</code>（スプレッド）でオブジェクトを展開できます。後に書いたものが優先されるので「デフォルト設定＋上書き」パターンが1行で書けます。元のオブジェクトは変更されません。</p>
+<pre>const merged = { ...defaults, ...overrides };</pre>
+<p class="task"><b>課題:</b> 関数 <code>mergeSettings(defaults, overrides)</code> を作り、2つをマージした新しいオブジェクトを返してください（overrides が優先）。</p>`,
+    starter: `function mergeSettings(defaults, overrides) {\n  // ここに書く\n}\n`,
+    hint: `return { ...defaults, ...overrides };`,
+    solution: `function mergeSettings(defaults, overrides) {\n  return { ...defaults, ...overrides };\n}`,
+    tests: [
+      T("上書きが優先される", f => eq("上書きが優先される", f({ bpm: 120, key: "C" }, { bpm: 140 }), { bpm: 140, key: "C" })),
+      T("元のオブジェクトを変更しない", f => { const d = { a: 1 }; f(d, { a: 2 }); return eq("元のオブジェクトを変更しない", d, { a: 1 }); }),
+    ],
+  },
+]},
+{
+  title: "第4章 非同期処理",
+  lessons: [
+  {
+    id: "delay", expose: "delay", title: "Promiseを作る",
+    desc: `<h2>4-1. Promiseを作る</h2>
+<p>JSは通信やタイマーを「待っている間」も止まりません。未来の値を表すのが <code>Promise</code> です。<code>new Promise(resolve =&gt; ...)</code> で作り、<code>resolve()</code> を呼ぶと完了します。</p>
+<pre>new Promise(resolve => {
+  setTimeout(() => resolve("done"), 1000);
+});</pre>
+<p class="task"><b>課題:</b> 関数 <code>delay(ms)</code> を作り、<code>ms</code> ミリ秒後に解決する Promise を返してください。</p>`,
+    starter: `function delay(ms) {\n  // ここに書く\n}\n`,
+    hint: `return new Promise(resolve => setTimeout(resolve, ms));`,
+    solution: `function delay(ms) {\n  return new Promise(resolve => setTimeout(resolve, ms));\n}`,
+    tests: [
+      T("Promiseを返す", f => check("Promiseを返す", f(1) instanceof Promise, "戻り値が Promise ではありません")),
+      T("指定時間後に解決する", async f => {
+        const t0 = performance.now();
+        await f(40);
+        const dt = performance.now() - t0;
+        return check("指定時間後に解決する", dt >= 25, `40ms 待つはずが ${Math.round(dt)}ms で解決しました`);
+      }),
+    ],
+  },
+  {
+    id: "fetchUserName", expose: "fetchUserName", title: "async / await",
+    desc: `<h2>4-2. async / await</h2>
+<p><code>async</code> を付けた関数の中では <code>await</code> で Promise の完了を待てます。<code>.then()</code> の連鎖より圧倒的に読みやすく、現代の非同期処理の標準です。</p>
+<pre>async function main() {
+  const res = await fetch(url);   // 完了を待つ
+  const data = await res.json();
+}</pre>
+<p class="task"><b>課題:</b> <code>async</code> 関数 <code>fetchUserName(api, id)</code> を作ってください。<code>api(id)</code> は <code>{ id, name }</code> オブジェクトに解決する Promise を返します。その <code>name</code> を返してください。</p>`,
+    starter: `async function fetchUserName(api, id) {\n  // ここに書く\n}\n`,
+    hint: `const user = await api(id); して user.name を返します。`,
+    solution: `async function fetchUserName(api, id) {\n  const user = await api(id);\n  return user.name;\n}`,
+    tests: [
+      T("nameを取り出せる", async f => {
+        const api = id => Promise.resolve({ id, name: `user${id}` });
+        return eq("nameを取り出せる", await f(api, 7), "user7");
+      }),
+      T("awaitしている（Promiseのまま返していない）", async f => {
+        const api = id => Promise.resolve({ id, name: "ok" });
+        const r = await f(api, 1);
+        return check("awaitしている（Promiseのまま返していない）", r === "ok", `実際 ${fmt(r)}`);
+      }),
+    ],
+  },
+  {
+    id: "fetchAllNames", expose: "fetchAllNames", title: "Promise.all",
+    desc: `<h2>4-3. Promise.all — 並列で待つ</h2>
+<p>複数の非同期処理を1つずつ <code>await</code> すると遅くなります。<code>Promise.all([...])</code> に Promise の配列を渡すと<b>並列</b>に実行し、全結果の配列で解決します。</p>
+<pre>const [a, b] = await Promise.all([fetchA(), fetchB()]);</pre>
+<p class="task"><b>課題:</b> <code>async</code> 関数 <code>fetchAllNames(api, ids)</code> を作ってください。すべての id を<b>並列</b>に取得し、name の配列を返します。</p>`,
+    starter: `async function fetchAllNames(api, ids) {\n  // ここに書く\n}\n`,
+    hint: `ids.map(id => api(id)) で Promise の配列を作り、Promise.all で待ってから map で name を取り出します。`,
+    solution: `async function fetchAllNames(api, ids) {\n  const users = await Promise.all(ids.map(id => api(id)));\n  return users.map(u => u.name);\n}`,
+    tests: [
+      T("全員のnameが返る", async f => {
+        const api = id => Promise.resolve({ id, name: `u${id}` });
+        return eq("全員のnameが返る", await f(api, [1, 2, 3]), ["u1", "u2", "u3"]);
+      }),
+      T("並列に実行している", async f => {
+        let active = 0, maxActive = 0;
+        const api = id => new Promise(res => {
+          active++; maxActive = Math.max(maxActive, active);
+          setTimeout(() => { active--; res({ id, name: `u${id}` }); }, 30);
+        });
+        await f(api, [1, 2, 3]);
+        return check("並列に実行している", maxActive >= 2, "1件ずつ順番に await しているようです（直列実行）");
+      }),
+    ],
+  },
+]},
+{
+  title: "第5章 DOM操作",
+  lessons: [
+  {
+    id: "makeButton", expose: "makeButton", title: "要素の生成",
+    desc: `<h2>5-1. 要素を作って追加する</h2>
+<p>ここからはブラウザの画面（DOM）を操作します。<code>document.createElement</code> で要素を作り、<code>textContent</code> で文字を設定し、<code>append</code> で親に追加します。</p>
+<pre>const btn = document.createElement("button");
+btn.textContent = "押してね";
+container.append(btn);</pre>
+<p class="task"><b>課題:</b> 関数 <code>makeButton(container)</code> を作り、テキストが <code>再生</code> の <code>&lt;button&gt;</code> を container に追加してください。</p>`,
+    starter: `function makeButton(container) {\n  // ここに書く\n}\n`,
+    hint: `createElement → textContent = "再生" → container.append(btn) の3ステップです。`,
+    solution: `function makeButton(container) {\n  const btn = document.createElement("button");\n  btn.textContent = "再生";\n  container.append(btn);\n}`,
+    tests: [
+      T("buttonが追加される", f => {
+        const c = document.createElement("div"); f(c);
+        return check("buttonが追加される", c.querySelector("button") !== null, "button 要素が見つかりません");
+      }),
+      T(`テキストが「再生」`, f => {
+        const c = document.createElement("div"); f(c);
+        return eq(`テキストが「再生」`, c.querySelector("button")?.textContent, "再生");
+      }),
+    ],
+  },
+  {
+    id: "renderList", expose: "renderList", title: "配列→リスト表示",
+    desc: `<h2>5-2. 配列からリストを描画</h2>
+<p>「データの配列をDOMに変換する」のはWebアプリの最重要パターンです。ReactもVueも、突き詰めればこれを自動化する仕組みです。</p>
+<p class="task"><b>課題:</b> 関数 <code>renderList(ul, items)</code> を作ってください。文字列配列 <code>items</code> の各要素を <code>&lt;li&gt;</code> にして <code>ul</code> に追加します。</p>`,
+    starter: `function renderList(ul, items) {\n  // ここに書く\n}\n`,
+    hint: `items に対してループ（for...of か forEach）し、各要素で li を作って append します。`,
+    solution: `function renderList(ul, items) {\n  for (const item of items) {\n    const li = document.createElement("li");\n    li.textContent = item;\n    ul.append(li);\n  }\n}`,
+    tests: [
+      T("li が3つできる", f => {
+        const ul = document.createElement("ul"); f(ul, ["kick", "snare", "hat"]);
+        return eq("li が3つできる", ul.querySelectorAll("li").length, 3);
+      }),
+      T("テキストが正しい", f => {
+        const ul = document.createElement("ul"); f(ul, ["kick", "snare"]);
+        const texts = [...ul.querySelectorAll("li")].map(li => li.textContent);
+        return eq("テキストが正しい", texts, ["kick", "snare"]);
+      }),
+    ],
+  },
+  {
+    id: "counterWidget", expose: "counterWidget", title: "イベント処理（卒業課題）",
+    desc: `<h2>5-3. 卒業課題 — クリックカウンター</h2>
+<p>最後は総合問題。<code>addEventListener("click", fn)</code> でクリックに反応させます。<b>状態（クロージャ）＋DOM生成＋イベント</b>という、UIコンポーネントの基本形そのものです。</p>
+<p class="task"><b>課題:</b> 関数 <code>counterWidget(container)</code> を作ってください。container に <code>&lt;button&gt;</code> と <code>&lt;span&gt;</code> を追加し、span の初期テキストは <code>"0"</code>。ボタンをクリックするたびに span の数字が1ずつ増えます。</p>`,
+    starter: `function counterWidget(container) {\n  // ここに書く\n}\n`,
+    hint: `let count = 0 を用意し、クリック時に count++ して span.textContent = String(count) で反映します。`,
+    solution: `function counterWidget(container) {\n  const btn = document.createElement("button");\n  btn.textContent = "+1";\n  const span = document.createElement("span");\n  span.textContent = "0";\n  let count = 0;\n  btn.addEventListener("click", () => {\n    count += 1;\n    span.textContent = String(count);\n  });\n  container.append(btn, span);\n}`,
+    tests: [
+      T("初期表示が 0", f => {
+        const c = document.createElement("div"); f(c);
+        return eq("初期表示が 0", c.querySelector("span")?.textContent, "0");
+      }),
+      T("3回クリックで 3", f => {
+        const c = document.createElement("div"); f(c);
+        const btn = c.querySelector("button");
+        if (!btn) return check("3回クリックで 3", false, "button 要素が見つかりません");
+        btn.click(); btn.click(); btn.click();
+        return eq("3回クリックで 3", c.querySelector("span")?.textContent, "3");
+      }),
+    ],
+  },
+]},
+];
+
+const ALL = CHAPTERS.flatMap(ch => ch.lessons);
+
+/* ============ 状態管理 ============ */
+const STORE_KEY = "js-trainer-v1";
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) ?? {}; }
+  catch { return {}; }
+}
+function saveState(state) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { /* file:// 等で失敗しても続行 */ }
+}
+let state = loadState(); // { [lessonId]: { code, done } }
+let current = ALL.find(l => !(state[l.id]?.done)) ?? ALL[0];
+
+/* ============ 実行エンジン ============ */
+async function runCode(lesson, code) {
+  const logs = [];
+  const fakeConsole = {
+    log: (...a) => logs.push(a.map(v => typeof v === "string" ? v : fmt(v)).join(" ")),
+    warn: (...a) => logs.push("[warn] " + a.map(String).join(" ")),
+    error: (...a) => logs.push("[error] " + a.map(String).join(" ")),
+  };
+  let fn;
+  try {
+    const factory = new Function("console", `"use strict";\n${code}\n;return typeof ${lesson.expose} !== "undefined" ? ${lesson.expose} : undefined;`);
+    fn = factory(fakeConsole);
+  } catch (e) {
+    return { error: `${e.name}: ${e.message}`, logs };
+  }
+  if (typeof fn !== "function") {
+    return { error: `関数 ${lesson.expose} が定義されていません（名前を確認してください）`, logs };
+  }
+  const results = [];
+  for (const t of lesson.tests) {
+    try {
+      results.push(await withTimeout(t.run(fn), 3000));
+    } catch (e) {
+      results.push({ pass: false, name: t.name, detail: e.message === "timeout" ? "3秒以内に完了しませんでした" : `例外: ${e.message}` });
+    }
+  }
+  return { results, logs };
+}
+function withTimeout(p, ms) {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+  ]);
+}
+
+/* ============ UI ============ */
+const $nav = document.getElementById("nav");
+const $desc = document.getElementById("desc");
+const $editor = document.getElementById("editor");
+const $output = document.getElementById("output");
+const $bar = document.querySelector("#progressbar > div");
+
+function renderNav() {
+  $nav.textContent = "";
+  for (const ch of CHAPTERS) {
+    const h = document.createElement("div");
+    h.className = "chapter";
+    h.textContent = ch.title;
+    $nav.append(h);
+    for (const l of ch.lessons) {
+      const el = document.createElement("div");
+      el.className = "lesson" + (l === current ? " active" : "") + (state[l.id]?.done ? " done" : "");
+      const mark = document.createElement("span");
+      mark.className = "mark";
+      mark.textContent = state[l.id]?.done ? "✓" : "○";
+      const label = document.createElement("span");
+      label.textContent = l.title;
+      el.append(mark, label);
+      el.addEventListener("click", () => selectLesson(l));
+      $nav.append(el);
+    }
+  }
+  const doneCount = ALL.filter(l => state[l.id]?.done).length;
+  $bar.style.width = `${Math.round(doneCount / ALL.length * 100)}%`;
+}
+
+function selectLesson(lesson) {
+  persistCode();
+  current = lesson;
+  $desc.innerHTML = lesson.desc;
+  const saved = state[lesson.id]?.code;
+  $editor.value = saved && saved.trim() ? saved : lesson.starter;
+  editorLoaded = true;
+  $output.innerHTML = `<span class="muted">コードを書いて「実行して採点」を押してください。</span>`;
+  renderNav();
+  $editor.focus();
+}
+
+let editorLoaded = false;
+function persistCode() {
+  if (!current || !editorLoaded) return;
+  state = { ...state, [current.id]: { ...state[current.id], code: $editor.value } };
+  saveState(state);
+}
+
+let runToken = 0;
+async function run() {
+  persistCode();
+  const token = ++runToken;
+  const lesson = current;
+  $output.innerHTML = `<span class="muted">実行中...</span>`;
+  const { error, results, logs } = await runCode(lesson, $editor.value);
+  if (token !== runToken || lesson !== current) return; // 実行中に切替/再実行された
+  $output.textContent = "";
+
+  for (const line of logs ?? []) {
+    const d = document.createElement("div");
+    d.className = "log";
+    d.textContent = "› " + line;
+    $output.append(d);
+  }
+  if (error) {
+    const d = document.createElement("div");
+    d.className = "err";
+    d.textContent = "✗ " + error;
+    $output.append(d);
+    return;
+  }
+  let allPass = true;
+  for (const r of results) {
+    const d = document.createElement("div");
+    d.className = "test " + (r.pass ? "pass" : "fail");
+    d.textContent = (r.pass ? "✓ " : "✗ ") + r.name + (r.pass || !r.detail ? "" : ` — ${r.detail}`);
+    $output.append(d);
+    if (!r.pass) allPass = false;
+  }
+  if (allPass) {
+    state = { ...state, [current.id]: { ...state[current.id], done: true } };
+    saveState(state);
+    renderNav();
+    const d = document.createElement("div");
+    d.className = "celebrate";
+    const idx = ALL.indexOf(current);
+    const next = ALL[idx + 1];
+    d.textContent = next ? `🎉 クリア！ 次は「${next.title}」へ（サイドバーから選択）` : "🏆 全問クリア！おめでとうございます！";
+    $output.append(d);
+  }
+}
+
+function showHint() {
+  const box = document.createElement("div");
+  box.className = "hintbox";
+  box.textContent = "💡 " + current.hint;
+  $output.append(box);
+}
+
+function showSolution() {
+  const box = document.createElement("div");
+  box.className = "hintbox";
+  const label = document.createElement("div");
+  label.textContent = "📖 解答例（まず自力で5分は粘るのがおすすめ）";
+  const pre = document.createElement("pre");
+  pre.textContent = current.solution;
+  box.append(label, pre);
+  $output.append(box);
+}
+
+document.getElementById("btn-run").addEventListener("click", run);
+document.getElementById("btn-hint").addEventListener("click", showHint);
+document.getElementById("btn-solution").addEventListener("click", showSolution);
+document.getElementById("btn-reset").addEventListener("click", () => {
+  $editor.value = current.starter;
+  persistCode();
+});
+
+$editor.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); run(); }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const { selectionStart: s, selectionEnd: end, value } = $editor;
+    $editor.value = value.slice(0, s) + "  " + value.slice(end);
+    $editor.selectionStart = $editor.selectionEnd = s + 2;
+  }
+});
+$editor.addEventListener("input", () => persistCode());
+
+renderNav();
+selectLesson(current);
+</script>
+</body>
+</html>
