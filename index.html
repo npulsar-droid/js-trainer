@@ -101,6 +101,22 @@
     padding: 10px 12px; margin-top: 10px; font-size: 13px; line-height: 1.7;
   }
   .hintbox pre { background: var(--bg); padding: 8px 10px; border-radius: 4px; font-family: var(--mono); font-size: 12.5px; margin-top: 6px; overflow-x: auto; }
+
+  /* ---- スマホ幅: 縦積みにしてページ全体をスクロール ---- */
+  @media (max-width: 720px) {
+    body { flex-direction: column; height: auto; min-height: 100vh; overflow: visible; }
+    #sidebar {
+      width: auto; min-width: 0; max-height: 34vh; padding: 12px 0;
+      border-right: none; border-bottom: 1px solid var(--border);
+    }
+    #main { overflow: visible; }
+    #desc { max-height: none; padding: 16px; }
+    #toolbar { flex-wrap: wrap; padding: 8px 16px; }
+    #toolbar .spacer, #toolbar .kbd { display: none; }
+    /* 16px 未満だと iOS がフォーカス時にズームする */
+    #editor { min-height: 45vh; padding: 12px 16px; font-size: 16px; }
+    #output { height: auto; min-height: 160px; padding: 12px 16px; }
+  }
 </style>
 </head>
 <body>
@@ -132,10 +148,33 @@
 "use strict";
 
 /* ============ テストヘルパー ============ */
+// JSON にできない値（NaN, undefined, -0 など）は JSON.stringify だと null や 0 に化けるので、そのまま表示する
+function fmtSpecial(v) {
+  if (v === undefined) return "undefined";
+  if (typeof v === "function") return "[function]";
+  if (typeof v === "bigint") return `${v}n`;
+  if (typeof v === "symbol") return String(v);
+  if (typeof v === "number" && Object.is(v, -0)) return "-0";
+  if (typeof v === "number" && !Number.isFinite(v)) return String(v);
+  return null;
+}
+const FMT_MARK = "\u2063fmt\u2063";
 function fmt(v) {
   if (typeof v === "string") return JSON.stringify(v);
-  if (typeof v === "function") return "[function]";
-  try { return JSON.stringify(v) ?? String(v); } catch { return String(v); }
+  const top = fmtSpecial(v);
+  if (top !== null) return top;
+  try {
+    const s = JSON.stringify(v, (k, x) => {
+      const sp = fmtSpecial(x);
+      return sp === null ? x : FMT_MARK + sp + FMT_MARK;
+    });
+    return s.replace(new RegExp(`"${FMT_MARK}(.*?)${FMT_MARK}"`, "g"), "$1");
+  } catch { return String(v); }
+}
+// throw されたのが Error 以外（文字列や null）でも落ちずに説明を作る
+function errText(e, withName) {
+  if (e instanceof Error) return withName ? `${e.name}: ${e.message}` : e.message;
+  return `throw された値: ${fmt(e)}`;
 }
 function deepEq(a, b) {
   if (Object.is(a, b)) return true;
@@ -225,6 +264,8 @@ const add = (a, b) => a + b;</pre>
     tests: [
       T("double(4)", f => eq("double(4)", f(4), 8)),
       T("double(-3)", f => eq("double(-3)", f(-3), -6)),
+      // アロー関数は prototype を持たない（function で書くと持つ）
+      T("アロー関数で定義している", f => check("アロー関数で定義している", !("prototype" in f), "function で定義されています。const double = n => ... の形で書いてください")),
     ],
   },
   {
@@ -508,17 +549,21 @@ let current = ALL.find(l => !(state[l.id]?.done)) ?? ALL[0];
 /* ============ 実行エンジン ============ */
 async function runCode(lesson, code) {
   const logs = [];
+  const line = (prefix, a) => logs.push(prefix + a.map(v => typeof v === "string" ? v : fmt(v)).join(" "));
   const fakeConsole = {
-    log: (...a) => logs.push(a.map(v => typeof v === "string" ? v : fmt(v)).join(" ")),
-    warn: (...a) => logs.push("[warn] " + a.map(String).join(" ")),
-    error: (...a) => logs.push("[error] " + a.map(String).join(" ")),
+    log: (...a) => line("", a),
+    info: (...a) => line("", a),
+    debug: (...a) => line("", a),
+    table: (...a) => line("", a),
+    warn: (...a) => line("[warn] ", a),
+    error: (...a) => line("[error] ", a),
   };
   let fn;
   try {
     const factory = new Function("console", `"use strict";\n${code}\n;return typeof ${lesson.expose} !== "undefined" ? ${lesson.expose} : undefined;`);
     fn = factory(fakeConsole);
   } catch (e) {
-    return { error: `${e.name}: ${e.message}`, logs };
+    return { error: errText(e, true), logs };
   }
   if (typeof fn !== "function") {
     return { error: `関数 ${lesson.expose} が定義されていません（名前を確認してください）`, logs };
@@ -528,16 +573,18 @@ async function runCode(lesson, code) {
     try {
       results.push(await withTimeout(t.run(fn), 3000));
     } catch (e) {
-      results.push({ pass: false, name: t.name, detail: e.message === "timeout" ? "3秒以内に完了しませんでした" : `例外: ${e.message}` });
+      results.push({ pass: false, name: t.name, detail: e === TIMEOUT ? "3秒以内に完了しませんでした" : `例外: ${errText(e, false)}` });
     }
   }
   return { results, logs };
 }
+const TIMEOUT = Symbol("timeout");
 function withTimeout(p, ms) {
+  let timer;
   return Promise.race([
     Promise.resolve(p),
-    new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
-  ]);
+    new Promise((_, rej) => { timer = setTimeout(() => rej(TIMEOUT), ms); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 /* ============ UI ============ */
@@ -563,7 +610,7 @@ function renderNav() {
       const label = document.createElement("span");
       label.textContent = l.title;
       el.append(mark, label);
-      el.addEventListener("click", () => selectLesson(l));
+      el.addEventListener("click", () => selectLesson(l, true));
       $nav.append(el);
     }
   }
@@ -571,7 +618,9 @@ function renderNav() {
   $bar.style.width = `${Math.round(doneCount / ALL.length * 100)}%`;
 }
 
-function selectLesson(lesson) {
+const isNarrow = () => window.matchMedia("(max-width: 720px)").matches;
+
+function selectLesson(lesson, fromUser = false) {
   persistCode();
   current = lesson;
   $desc.innerHTML = lesson.desc;
@@ -580,7 +629,9 @@ function selectLesson(lesson) {
   editorLoaded = true;
   $output.innerHTML = `<span class="muted">コードを書いて「実行して採点」を押してください。</span>`;
   renderNav();
-  $editor.focus();
+  // スマホ幅では勝手にキーボードを出さず、選んだ課題の説明を見せる
+  if (!isNarrow()) $editor.focus();
+  else if (fromUser) $desc.scrollIntoView({ block: "start" });
 }
 
 let editorLoaded = false;
@@ -656,6 +707,8 @@ document.getElementById("btn-run").addEventListener("click", run);
 document.getElementById("btn-hint").addEventListener("click", showHint);
 document.getElementById("btn-solution").addEventListener("click", showSolution);
 document.getElementById("btn-reset").addEventListener("click", () => {
+  // 自動保存されるので、誤クリックで書いたコードが消えないよう確認する
+  if ($editor.value !== current.starter && !confirm("書いたコードを消して初期状態に戻します。よろしいですか？")) return;
   $editor.value = current.starter;
   persistCode();
 });
