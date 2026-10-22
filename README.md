@@ -35,13 +35,14 @@ DOM操作の課題は、その場で作った要素に対して検証するの�
 そのまま開くだけです。
 
 ```bash
-open index.html
+open index.html   # macOS（Windows は start index.html、Linux は xdg-open index.html）
 ```
 
 ローカルサーバ経由でも動きます。
 
 ```bash
 python3 -m http.server 8642
+# → http://localhost:8642/ を開く
 ```
 
 > **注意**: `file://` で開いた場合と `localhost` で開いた場合では、
@@ -52,6 +53,7 @@ python3 -m http.server 8642
 - 採点: `new Function` で書いたコードを評価し、各レッスンのテストを実行
 - 保存: localStorage
 - 外部ライブラリなし
+- 自己テスト: `node test.mjs`（依存なし。全問の模範解答が採点を通るか、初期コードが通らないかなどを確認）
 
 ## ライセンス
 
